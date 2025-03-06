@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"sync"
 
@@ -71,12 +72,40 @@ func toggleTaskDone(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "Task not found", http.StatusNotFound)
 }
 
+func updateTaskName(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	var updatedTask Task
+	json.NewDecoder(r.Body).Decode(&updatedTask)
+
+	mu.Lock()
+	for i, task := range tasks {
+		if task.ID == id {
+			tasks[i].Name = updatedTask.Name
+			json.NewEncoder(w).Encode(tasks[i])
+			mu.Unlock()
+			return
+		}
+	}
+	mu.Unlock()
+
+	http.Error(w, "Task not found", http.StatusNotFound)
+}
+
 func main() {
 	router := mux.NewRouter()
+
+	tasks = append(tasks, Task{ID: "1", Name: "T1", Done: false})
+	tasks = append(tasks, Task{ID: "2", Name: "T2", Done: false})
+	tasks = append(tasks, Task{ID: "3", Name: "T3", Done: false})
+
 	router.HandleFunc("/tasks", getTasks).Methods("GET")
 	router.HandleFunc("/tasks", addTask).Methods("POST")
 	router.HandleFunc("/tasks/{id}", deleteTask).Methods("DELETE")
 	router.HandleFunc("/tasks/{id}/done", toggleTaskDone).Methods("PUT")
+	router.HandleFunc("/tasks/{id}/name", updateTaskName).Methods("PUT")
 
 	c := cors.New(cors.Options{
 		AllowedOrigins:   []string{"http://localhost:3000"},
@@ -86,5 +115,5 @@ func main() {
 	})
 
 	handler := c.Handler(router)
-	http.ListenAndServe(":8080", handler)
+	log.Fatal(http.ListenAndServe(":8080", handler))
 }
